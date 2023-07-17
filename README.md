@@ -34,8 +34,14 @@ Prompt template: `<ctrl token>: <query text>`
 ## Reward Modeling
 
 ### Regression Manner
-$$a \cdot b$$
+$$response_reward = (simplicity_score - baseline) \cdot rescaling_factor \cdot sign(target_cls_id)$$
 
-$$\sum^n_{i=1}x^i=1$$
+$$
+sign(target_cls_id) = 
+\begin{cases}
+1& \text{target_cls_id \geq 2}\\
+-1& \text{else}
+\end{cases}
+$$
 
 ### Classification Manner
