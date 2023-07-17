@@ -34,7 +34,7 @@ Prompt template: `<ctrl token>: <query text>`
 ## Reward Modeling
 
 ### Regression Manner
-$$\cdot$$
+$$a \cdot b$$
 
 $$\sum^n_{i=1}x^i=1$$
 
