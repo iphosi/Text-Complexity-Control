@@ -34,8 +34,6 @@ Prompt template: `<ctrl token>: <query text>`
 ## Reward Modeling
 
 ### Regression Manner
-```math
-\cdot
-```
+$$\cdot$$
 
 ### Classification Manner
