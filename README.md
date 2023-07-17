@@ -17,31 +17,49 @@ Please download the model and save it under `./baseline_models/gpt2-german-oscar
 
 ## Training Strategy
 Basically, the baseline model parameters are frozen and the inserted `LoRA` adapter modules are trained on the stylistic
-continuation task via `PPO`.
+continuation task via `RLHF`.
 ### Stylistic Continuation
 The first n tokens of a text sample will be fed into the model together with one of the following control tokens.
 The model should extend the query text at a certain complexity level accordingly.
 
-| Control Token      | Target Class      | Target Class ID |
-|--------------------|-------------------|-----------------|
-| [Leichte Sprache]  | Easy Language     | 0               |
-| [Einfache Sprache] | Plain Language    | 1               |
-| [Alltagssprache]   | Everyday Language | 2               |
-| [Fachsprache]      | Special Language  | 3               |
+| Control Token        | Target Class      | Target Class ID |
+|----------------------|-------------------|-----------------|
+| \[Leichte Sprache\]  | Easy Language     | 0               |
+| \[Einfache Sprache\] | Plain Language    | 1               |
+| \[Alltagssprache\]   | Everyday Language | 2               |
+| \[Fachsprache\]      | Special Language  | 3               |
 
 Prompt template: `<ctrl token>: <query text>`
+
+The multi-complexity-level generation task is first treated as four subtasks that correspond to a certain language level respectively.
+When training each subtask, only one type of control token will be added in the front of the query text.
+During the fusion of subadapters, control tokens are randomly sampled.
 
 ## Reward Modeling
 
 ### Regression Manner
-$$response_reward = (simplicity_score - baseline) \cdot rescaling_factor \cdot sign(target_cls_id)$$
+Ideally, a regression reward model should predict the human opinion toward the response text complexity.
+Due to the scarcity of human feedback data, `Flesch–Kincaid Grade Level` is used as an approximation,
+which is highly correlated to the real human feedback (**M**ean **O**pinion **S**core).
 
-$$
-sign(target_cls_id) = 
+<p align="center">
+<img src="images/pearson_mos_kincaid.png" alt="Stanford-Alpaca" style="width: 25%; min-width: 300px; display: block; margin: auto;">
+</p>
+
+The response reward is calculated as the difference between the simplicity score and a predefined baseline.
+```math
+response\_reward = (simplicity\_score - baseline) \cdot rescaling\_factor \cdot sign(target\_cls\_id)
+```
+```math
+sign(target\_cls\_id) =
 \begin{cases}
-1& \text{target_cls_id \geq 2}\\
--1& \text{else}
+1& {target\_cls\_id \geq 2}\\
+-1& {else}
 \end{cases}
-$$
+```
 
 ### Classification Manner
+The predicted logit corresponding to the control token i.e. target class is used as the response reward.
+```math
+response\_reward = target\_cls\_logit \cdot rescaling\_factor
+```
