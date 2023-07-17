@@ -36,4 +36,6 @@ Prompt template: `<ctrl token>: <query text>`
 ### Regression Manner
 $$\cdot$$
 
+$$\sum^n_{i=1}x^i=1$$
+
 ### Classification Manner
