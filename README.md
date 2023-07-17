@@ -38,15 +38,7 @@ During the fusion of subadapters, control tokens are randomly sampled.
 ## Reward Modeling
 
 ### Regression Manner
-Ideally, a regression reward model should predict the human opinion toward the response text complexity.
-Due to the scarcity of human feedback data, `Flesch–Kincaid Grade Level` is used as an approximation,
-which is highly correlated to the real human feedback (**M**ean **O**pinion **S**core).
-
-<p align="center">
-<img src="images/pearson_mos_kincaid.png" alt="Stanford-Alpaca" style="width: 25%; min-width: 300px; display: block; margin: auto;">
-</p>
-
-The response reward is calculated as the difference between the simplicity score and a predefined baseline.
+In regression manner, the response reward is calculated as the difference between the response text simplicity score predicted by a regression model and a predefined baseline:
 ```math
 response\_reward = (simplicity\_score - baseline) \cdot rescaling\_factor \cdot sign(target\_cls\_id)
 ```
@@ -58,8 +50,23 @@ sign(target\_cls\_id) =
 \end{cases}
 ```
 
+The optimization process can be regarded as shifting the text complexity distribution away from the baseline.
+
+Ideally, a regression reward model should predict the human opinion toward the response text complexity.
+Due to the scarcity of human feedback data, `Flesch–Kincaid Grade Level` is used as an approximation,
+which is highly correlated to the real human feedback (**M**ean **O**pinion **S**core).
+
+<p align="center">
+<img src="images/pearson_mos_kincaid.png" alt="Stanford-Alpaca" style="width: 35%; min-width: 300px; display: block; margin: auto;">
+</p>
+
 ### Classification Manner
-The predicted logit corresponding to the control token i.e. target class is used as the response reward.
+In classification manner, the response text is classified into four categories i.e. easy, plain, everyday and special by the reward model.
+The predicted logit corresponding to the control token i.e. target class is used as the response reward:
 ```math
 response\_reward = target\_cls\_logit \cdot rescaling\_factor
 ```
+
+The optimization process can be regarded as sharpening the text complexity distribution.
+
+`krupper/text-complexity-classification` is selected as the classification reward model.
