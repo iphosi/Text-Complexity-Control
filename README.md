@@ -65,7 +65,7 @@ sign(target\_cls\_id) =
 \end{cases}
 ```
 
-The optimization process can be regarded as shifting the text complexity distribution away from the baseline (see [Evaluation](#evaluation)).
+The optimization process can be regarded as shifting the text complexity distribution away from the baseline (see [Evaluation](#regression)).
 
 Ideally, a regression reward model should predict the human opinion toward the response text complexity.
 Due to the scarcity of human feedback data, **F**lesch–**K**incaid **G**rade **L**evel is used as an approximation,
@@ -82,7 +82,7 @@ The predicted logit corresponding to the control token i.e. target class is used
 response\_reward = target\_cls\_logit \cdot rescaling\_factor
 ```
 
-The optimization process can be regarded as sharpening the text complexity distribution (see [Evaluation](#evaluation)).
+The optimization process can be regarded as sharpening the text complexity distribution (see [Evaluation](#classification)).
 
 `krupper/text-complexity-classification` serves as the classification reward model.
 
@@ -102,14 +102,14 @@ model.add_weighted_adapter(
 ```
 
 By tuning the weight values, a fine-grained control of the output text complexity can be realized.
-However, this also leads to a dramatic drop in the model's understanding in control tokens (see [Evaluation](#evaluation)).
+However, this also leads to a dramatic drop in the model's understanding in control tokens (see [Evaluation](#ensemble-with-fixed-weights)).
 
 ### Fusion with Learnable Weights
 Currently, there isn't any generalized method to fuse the knowledge of `LoRA` adapters.
 But in our case, the subtasks are highly correlated so that the fusion is relatively easy.
 The general idea is to load and freeze the task adapters in the attention layer and train an additional fusion adapter inserted in the feed forward layer via the above-mentioned training strategy.
 
-This strategy can to some extent recover the model's understanding in control tokens (see [Evaluation](#evaluation)).
+This strategy can to some extent recover the model's understanding in control tokens (see [Evaluation](#fusion-with-learnable-weights)).
 
 ## Evaluation
 388 query texts are fed into the models to evaluate the output text complexity distribution.
