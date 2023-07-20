@@ -121,6 +121,7 @@ def train_adapter(
         "special": "[Fachsprache]: "
     }
     prompt_template = list(map(style2prompt.get, target_styles))
+    assert len(prompt_template) == len(baselines)
 
     if dataset_type == "Monolingual":
         dataset, dataset_names = get_monolingual_dataset(
@@ -390,25 +391,26 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Debugging
-    train_adapter(
-        log_with=None,
-        model_path="../baseline_models/gpt2-german-oscar/CAUSAL_LM",
-        model_name="gpt2-german-oscar",
-        use_ref=True,
-        from_local=True,
-        task_type="CAUSAL_LM",
-        target_modules=["c_attn", "c_fc"],
-        target_styles=["plain", "everyday"],
-        max_length=1024,
-        dataset_type="Monolingual",
-        data_path="../datasets/monolingual_Leichte_Sprache/test",
-        fuse_subadapters=False,
-        batch_size=4,
-        reward_type="reg",
-        use_bert_reg=False,
-        baselines=[8, 8],
-        query_length=8
-    )
+    # train_adapter(
+    #     log_with=None,
+    #     model_path="../baseline_models/gpt2-german-oscar/CAUSAL_LM",
+    #     model_name="gpt2-german-oscar",
+    #     use_ref=True,
+    #     from_local=True,
+    #     task_type="CAUSAL_LM",
+    #     target_modules=["c_attn"],
+    #     target_styles=["plain", "everyday"],
+    #     max_length=1024,
+    #     dataset_type="Monolingual",
+    #     data_path="../datasets/monolingual_Leichte_Sprache/test",
+    #     fuse_subadapters=False,
+    #     batch_size=4,
+    #     reward_type="cls",
+    #     use_cls_logits=False,
+    #     use_bert_reg=False,
+    #     baselines=[0.4, 0.4],
+    #     query_length=8
+    # )
 
     # train_adapter(
     #     log_with=None,
