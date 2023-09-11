@@ -90,7 +90,7 @@ class EasyLangPPOTrainer(PPOTrainer):
         generation_kwargs=None,
         bert_cls_model_path="krupper/text-complexity-classification",
         bert_reg_model_path="../reward_models/reg/distilbert_ft/model",
-        bert_reg_tokenizer_path="../baseline_models/distilbert-german/SEQ_CLS_K1",
+        bert_reg_tokenizer_path="../baseline_models/distilbert-german/SEQ_CLS",
         ensemble_reg_model_path="../reward_models/reg/ensemble/ensemble.joblib",
         reg_model_path_list=None,
         language="de",
@@ -181,19 +181,11 @@ class EasyLangPPOTrainer(PPOTrainer):
             self.bert_reg_tokenizer = AutoTokenizer.from_pretrained(bert_reg_tokenizer_path)
             self.ensemble_reg_model = load(ensemble_reg_model_path)
             self.reg_models = [load(path) for path in reg_model_path_list]
-            self.bert_features = ["Coleman-Liau", "LIX", "SMOGIndex"] if bert_features is None else bert_features
+            self.bert_features = ["Kincaid", "Coleman-Liau", "SMOGIndex"] if bert_features is None else bert_features
 
         self.reward_type = reward_type
         self.reward_scaling_factor = reward_scaling_factor
         self.use_cls_logits = use_cls_logits
-
-        if self.reward_type == "cls":
-            if self.use_cls_logits:
-                baselines = [0, 0, 0, 0] if baselines is None else baselines
-            else:
-                baselines = [0.5, 0.5, 0.5, 0.5] if baselines is None else baselines
-        elif self.reward_type == "reg":
-            baselines = [6.5, 8, 8, 9.5] if baselines is None else baselines
 
         self.baselines = {self.ctrl2id[prompt]: baseline for prompt, baseline in zip(prompt_template, baselines)}
         self.dynamic_baseline = dynamic_baseline
@@ -250,7 +242,7 @@ class EasyLangPPOTrainer(PPOTrainer):
                 if self.reward_type == "cls":
                     simp_scores = self.get_cls_simp_scores(response_texts)
 
-                    if self.task_type == "CAUSAL_LM":
+                    if self.task_type == "CAUSAL_LM" or self.task_type == "SEQ_2_SEQ_LM":
                         if self.use_cls_logits:
                             rewards = [
                                 simp_scores["logits"][i][tgt_ids[i]] - self.baselines[tgt_ids[i]]
@@ -261,8 +253,6 @@ class EasyLangPPOTrainer(PPOTrainer):
                                 simp_scores["probs"][i][tgt_ids[i]] - self.baselines[tgt_ids[i]]
                                 for i in range(batch_size)
                             ]
-                    elif self.task_type == "SEQ_2_SEQ_LM":
-                        raise NotImplementedError
                     else:
                         raise NotImplementedError
 
@@ -298,8 +288,10 @@ class EasyLangPPOTrainer(PPOTrainer):
                 batch["query"] = query_texts
                 batch["response"] = response_texts
 
+                query_length = query_tensors.size(1)
+
                 query_tensors = list(query_tensors)
-                response_tensors = list(response_tensors)
+                response_tensors = list(response_tensors[:, query_length:])
                 rewards = list(torch.tensor(rewards) * self.reward_scaling_factor)
 
                 stats = self.step(query_tensors, response_tensors, rewards)

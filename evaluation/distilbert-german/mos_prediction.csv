@@ -1,0 +1,4 @@
+Tuning Method,RMSE
+TCP_FT_MOS,0.466
+TCP_ADP_BN_S_r16_MOS,0.656
+TCP_ADP_BN_S_r16_fusion_MOS,0.652

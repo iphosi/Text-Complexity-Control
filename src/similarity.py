@@ -17,7 +17,6 @@ def get_rep_spaces(
     tokenizer,
     device,
     texts,
-    ctrl_string=None,
     num_sample_tokens=1000,
     seed=40
 ):
@@ -25,17 +24,12 @@ def get_rep_spaces(
     Returns the flattened upper triangular of the similarity matrix in each layer.
     """
 
-    if ctrl_string:
-        batch_input_ids = (
-            tokenizer(ctrl_string + text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
-            for text in texts
-        )
-    else:
-        batch_input_ids = (
-            tokenizer(text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
-            for text in texts
-        )
-
+    batch_input_ids = (
+        tokenizer(text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
+        for text in texts
+    )
+    # hidden_states: Tuple of torch.FloatTensor of shape (batch_size, sequence_length, hidden_size).
+    # One for the output of the embeddings + One for the output of each layer
     with torch.no_grad():
         batch_hidden_states = (
             model(

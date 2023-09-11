@@ -1,0 +1,4 @@
+Tuning Method,%Param,PPL Simple,PPL Normal
+Baseline,-,62.415,68.636
+FT,100,34.55,174.778
+ADP_BN_S_r16,0.419,65.343,126.2

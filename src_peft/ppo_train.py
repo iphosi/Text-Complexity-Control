@@ -14,7 +14,7 @@ from trl import (
     AutoModelForSeq2SeqLMWithValueHead,
     create_reference_model
 )
-from peft import PeftModel, LoraConfig, get_peft_model
+from peft import PeftModel, LoraConfig
 
 from preprocess import (
     split_dataset,
@@ -121,6 +121,14 @@ def train_adapter(
         "special": "[Fachsprache]: "
     }
     prompt_template = list(map(style2prompt.get, target_styles))
+
+    if reward_type == "cls":
+        if use_cls_logits:
+            baselines = [0, 0, 0, 0] if baselines is None else baselines
+        else:
+            baselines = [0.5, 0.5, 0.5, 0.5] if baselines is None else baselines
+    elif reward_type == "reg":
+        baselines = [6.5, 8, 8, 9.5] if baselines is None else baselines
     assert len(prompt_template) == len(baselines)
 
     if dataset_type == "Monolingual":
@@ -179,10 +187,10 @@ def train_adapter(
     if fuse_subadapters:
         print("Fuse LoRA adapters.")
         subadapter_dict = {
-            "easy": f"../adapters/ppo/{model_name}/{adapter_name}/reg/easy/checkpoint-300-0",
-            "plain": f"../adapters/ppo/{model_name}/{adapter_name}/reg/plain/checkpoint-300-0",
-            "everyday": f"../adapters/ppo/{model_name}/{adapter_name}/reg/everyday/checkpoint-300-0",
-            "special": f"../adapters/ppo/{model_name}/{adapter_name}/reg/special/checkpoint-300-0"
+            "easy": f"../adapters/{model_name}/stylistic_continuation/{adapter_name}/checkpoints/{reward_type}/easy/checkpoint-300-0",
+            "plain": f"../adapters/{model_name}/stylistic_continuation/{adapter_name}/checkpoints/{reward_type}/plain/checkpoint-300-0",
+            "everyday": f"../adapters/{model_name}/stylistic_continuation/{adapter_name}/checkpoints/{reward_type}/everyday/checkpoint-300-0",
+            "special": f"../adapters/{model_name}/stylistic_continuation/{adapter_name}/checkpoints/{reward_type}/special/checkpoint-300-0"
         }
 
         model = PeftModel(model, adapter_config, adapter_name="fusion")
@@ -190,6 +198,8 @@ def train_adapter(
         print("Load subadapters.")
         for i, name in enumerate(target_styles):
             path = subadapter_dict[name]
+            print(path)
+            assert os.path.exists(path)
             model.load_adapter(path, adapter_name=name)
 
         adapter_names = ["fusion"] + target_styles
@@ -286,7 +296,7 @@ def train_adapter(
     else:
         scheduler = None
 
-    output_path = f"../adapters/ppo/{model_name}/{adapter_name}/{project_name}/checkpoints"
+    output_path = f"../adapters/{model_name}/stylistic_continuation/{adapter_name}/{project_name}/checkpoints"
 
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -391,26 +401,26 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Debugging
-    # train_adapter(
-    #     log_with=None,
-    #     model_path="../baseline_models/gpt2-german-oscar/CAUSAL_LM",
-    #     model_name="gpt2-german-oscar",
-    #     use_ref=True,
-    #     from_local=True,
-    #     task_type="CAUSAL_LM",
-    #     target_modules=["c_attn"],
-    #     target_styles=["plain", "everyday"],
-    #     max_length=1024,
-    #     dataset_type="Monolingual",
-    #     data_path="../datasets/monolingual_Leichte_Sprache/test",
-    #     fuse_subadapters=False,
-    #     batch_size=4,
-    #     reward_type="cls",
-    #     use_cls_logits=False,
-    #     use_bert_reg=False,
-    #     baselines=[0.4, 0.4],
-    #     query_length=8
-    # )
+    train_adapter(
+        log_with=None,
+        model_path="../baseline_models/gpt2-german-oscar/CAUSAL_LM",
+        model_name="gpt2-german-oscar",
+        use_ref=True,
+        from_local=True,
+        task_type="CAUSAL_LM",
+        target_modules=["c_attn"],
+        target_styles=["plain", "everyday"],
+        max_length=1024,
+        dataset_type="Monolingual",
+        data_path="../datasets/monolingual_Leichte_Sprache/test",
+        fuse_subadapters=False,
+        batch_size=4,
+        reward_type="cls",
+        use_cls_logits=False,
+        use_bert_reg=False,
+        baselines=[0.4, 0.4],
+        query_length=8
+    )
 
     # train_adapter(
     #     log_with=None,

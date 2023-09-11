@@ -111,91 +111,6 @@ def get_monolingual_dataset(
     )
 
 
-class ParallelDataset(Dataset):
-    def __init__(
-        self,
-        csv_file,
-        tokenizer,
-        max_length,
-        stride_length,
-        train_seq2seq,
-    ):
-        text_dataframe = pd.read_csv(csv_file, dtype=str)[["normal_phrase", "simple_phrase"]].dropna()
-        text_dataframe = text_dataframe.loc[
-            text_dataframe["normal_phrase"].str.contains("[a-zA-Z]")
-            &
-            text_dataframe["simple_phrase"].str.contains("[a-zA-Z]")
-        ]
-        src_texts = [unicodedata.normalize("NFC", s) for s in text_dataframe["normal_phrase"].values.tolist()]
-        tgt_texts = [unicodedata.normalize("NFC", s) for s in text_dataframe["simple_phrase"].values.tolist()]
-
-        self.train_seq2seq = train_seq2seq
-
-        self.src_texts = src_texts
-        self.tgt_texts = tgt_texts
-        self.texts = [f"Source: {src}\nTarget: {tgt}" for src, tgt in zip(self.src_texts, self.tgt_texts)]
-
-        self.src_encodings = tokenizer(
-            self.src_texts,
-            truncation=True,
-            max_length=max_length,
-            stride=stride_length,
-            add_special_tokens=True
-        )
-        self.tgt_encodings = tokenizer(
-            self.tgt_texts,
-            truncation=True,
-            max_length=max_length,
-            stride=stride_length,
-            add_special_tokens=True
-        )
-
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.src_encodings.items()}
-
-        if self.train_seq2seq:
-            item["labels"] = torch.tensor(self.tgt_encodings["input_ids"][idx])
-
-        return item
-
-    def __len__(self):
-        return len(self.texts)
-
-
-class ConcatParallelDataset(ConcatDataset):
-    def __init__(self, datasets: List[ParallelDataset]):
-        super().__init__(datasets)
-
-
-def get_parallel_dataset(
-    tokenizer,
-    max_length,
-    stride_length=64,
-    train_seq2seq=False,
-    input_path="../datasets/aligned_German_simplification"
-):
-    dataset_path_list = glob.glob(f"{input_path}/*.csv")
-    dataset_path_list.sort()
-
-    dataset_list = [
-        ParallelDataset(
-            csv_file=path,
-            tokenizer=tokenizer,
-            max_length=max_length,
-            stride_length=stride_length,
-            train_seq2seq=train_seq2seq
-        )
-        for path in dataset_path_list
-    ]
-
-    dataset_name_list = [os.path.basename(path) for path in dataset_path_list]
-
-    return (
-        ConcatParallelDataset(dataset_list),
-        dataset_name_list
-    )
-
-
 class TextComplexityDataset(Dataset):
     def __init__(
         self,
@@ -205,33 +120,29 @@ class TextComplexityDataset(Dataset):
         tokenizer,
         max_length,
         stride_length,
-        return_features,
-        feature_column_names=None,
-        num_labels=1,
-        label2id=None,
+        return_features
     ):
-        label2id = {
-            "A2": 0,
-            "B1": 1,
-            "B2": 2
-        } if label2id is None else label2id
-
         text_dataframe = pd.read_csv(csv_file).dropna()
         text_dataframe = text_dataframe.loc[text_dataframe[text_column_name].str.contains("[a-zA-Z]")]
         texts = [unicodedata.normalize("NFC", s) for s in text_dataframe[text_column_name].values.tolist()]
         labels = text_dataframe[target_label].values.tolist()
-        if num_labels > 1:
-            assert num_labels == len(label2id)
-            labels = list(map(lambda l: label2id[l], labels))
 
-        if return_features and feature_column_names:
-            self.feature_column_names = feature_column_names
-            self.features = text_dataframe[feature_column_names].values.tolist()
+        if target_label == "MOS":
+            feature_column_names = [
+                "Kincaid",
+                "ARI",
+                "Coleman-Liau",
+                "FleschReadingEase",
+                "GunningFogIndex",
+                "LIX",
+                "SMOGIndex",
+                "RIX",
+                "DaleChallIndex",
+                "WLF"
+            ]
+            features = text_dataframe[feature_column_names].values.tolist()
         else:
-            self.feature_column_names = None,
-            self.features = None
-
-        self.return_features = return_features
+            features = None
 
         self.texts = texts
         self.encodings = tokenizer(
@@ -243,7 +154,8 @@ class TextComplexityDataset(Dataset):
         )
         self.target_label = target_label
         self.labels = labels
-
+        self.features = features
+        self.return_features = return_features
         self.max = max(labels)
         self.min = min(labels)
 
@@ -268,7 +180,6 @@ class ConcatTextComplexityDataset(ConcatDataset):
         rescaling_factor=100
     ):
         self.target_label = datasets[0].target_label
-        self.feature_column_names = datasets[0].feature_column_names
         self.max = max(dataset.max for dataset in datasets) if max_value is None else max_value
         self.min = min(dataset.min for dataset in datasets) if min_value is None else min_value
         self.rescaling_factor = rescaling_factor
@@ -292,9 +203,6 @@ def get_text_complexity_dataset(
     max_length,
     stride_length=64,
     return_features=False,
-    feature_column_names=None,
-    num_labels=1,
-    label2id=None,
     text_column_name="phrase",
     target_label="Kincaid",
     do_rescaling=False,
@@ -314,10 +222,7 @@ def get_text_complexity_dataset(
             tokenizer=tokenizer,
             max_length=max_length,
             stride_length=stride_length,
-            return_features=return_features,
-            feature_column_names=feature_column_names,
-            num_labels=num_labels,
-            label2id=label2id
+            return_features=return_features
         )
         for path in dataset_path_list
     ]
@@ -396,3 +301,138 @@ def adapter_summary(model, as_dict=False):
         }
     else:
         return f"adapter params: {adapter_params} || all params: {all_params} || %param: {param}"
+
+
+def specify_config(
+    model_path,
+    model_name,
+    special_tokens_dict=None,
+    head_type="causal",
+    embd_pdrop=0.1,
+    attn_pdrop=0.1,
+    resid_pdrop=0.1,
+    output_path="../adapters",
+    save_config=False
+):
+    special_tokens_dict = {
+        "bos_token": "<|bos|>",
+        "eos_token": "<|eos|>",
+        "pad_token": "<|pad|>",
+        "unk_token": "<|unk|>"
+    } if special_tokens_dict is None else special_tokens_dict
+
+    head_type_list = ["causal", "regression"]
+    if head_type not in head_type_list:
+        raise ValueError("Unknown head type.")
+
+    bos = special_tokens_dict["bos_token"]
+    eos = special_tokens_dict["eos_token"]
+
+    tokenizer_orig = AutoTokenizer.from_pretrained(model_path)
+    tokenizer_orig.add_special_tokens(special_tokens_dict)
+
+    tokenizer = Tokenizer.from_pretrained(model_path)
+    tokenizer.post_processor = TemplateProcessing(
+        single=bos + " $A " + eos,
+        special_tokens=[(eos, tokenizer_orig.eos_token_id), (bos, tokenizer_orig.bos_token_id)],
+    )
+    tokenizer = GPT2TokenizerFast(tokenizer_object=tokenizer)
+    tokenizer.add_special_tokens(special_tokens_dict)
+
+    if head_type == "causal":
+        model_config = AutoConfig.from_pretrained(
+            model_path,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+    elif head_type == "regression":
+        model_config = AutoConfig.from_pretrained(
+            model_path,
+            num_labels=1,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+    else:
+        raise ValueError("Unknown head type.")
+
+    model_config.embd_pdrop = embd_pdrop
+    model_config.attn_pdrop = attn_pdrop
+    model_config.resid_pdrop = resid_pdrop
+
+    if head_type == "causal":
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path, config=model_config, device_map="auto"
+        )
+    elif head_type == "regression":
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_path, config=model_config, device_map="auto"
+        )
+    else:
+        raise ValueError("Unknown head type.")
+
+    if tokenizer and model:
+        model.resize_token_embeddings(len(tokenizer))
+
+        if save_config:
+            tokenizer.save_pretrained(
+                os.path.join(output_path, f"{model_name}/Orig/{head_type}")
+            )
+            model.save_pretrained(
+                os.path.join(output_path, f"{model_name}/Orig/{head_type}")
+            )
+
+    return model, tokenizer
+
+
+def specify_bloom_config(
+    model_path,
+    model_name,
+    special_tokens_dict=None,
+    head_type="causal",
+    output_path="../baseline_models",
+    save_config=False
+):
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+    special_tokens_dict = {
+        "cls_token": tokenizer.eos_token,
+        "mask_token": tokenizer.eos_token,
+        "pad_token": tokenizer.eos_token,
+        "sep_token": tokenizer.eos_token
+    } if special_tokens_dict is None else special_tokens_dict
+
+    tokenizer.add_special_tokens(special_tokens_dict)
+
+    if head_type == "causal":
+        model_config = AutoConfig.from_pretrained(
+            model_path,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+        model = AutoModelForCausalLM.from_pretrained(model_path, config=model_config, device_map="auto")
+
+    elif head_type == "regression":
+        model_config = AutoConfig.from_pretrained(
+            model_path,
+            num_labels=1,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(model_path, config=model_config, device_map="auto")
+
+    else:
+        raise ValueError("Unknown head type.")
+
+    if save_config:
+        output_path = os.path.join(output_path, f"{model_name}/{head_type}")
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        tokenizer.save_pretrained(output_path)
+        model.save_pretrained(output_path)
+
+    return model, tokenizer
